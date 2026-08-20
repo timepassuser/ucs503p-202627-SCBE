@@ -47,3 +47,13 @@ a.autorefs-external:hover::after {
 [data-md-color-scheme="slate"] {
   --md-default-bg-color: hsl(227, 15%, 8%);
 }
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4,
+.md-typeset h5,
+.md-typeset h6 {
+  font-weight: 700;
+  color: var(--md-default-fg-color);
+}
