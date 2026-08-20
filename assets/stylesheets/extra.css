@@ -54,6 +54,6 @@ a.autorefs-external:hover::after {
 .md-typeset h4,
 .md-typeset h5,
 .md-typeset h6 {
-  font-weight: 700;
-  color: var(--md-default-fg-color);
+  font-weight: 600;
+  /* color: var(--md-default-fg-color); */
 }
