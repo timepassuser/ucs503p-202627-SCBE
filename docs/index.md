@@ -3,17 +3,17 @@
 **UCS503: Software Engineering (Project)**  
 **TIET Patiala - Team Infinix (3Q11)**
 
-**# SCBE (Semi Computer Based Evaluation)**
+# SCBE (Semi Computer Based Evaluation)
 
-**## Project Details**
+## Project Details
 
-**### The Problem**
+### The Problem
 
 After examinations, students may have to return to college during their vacations to view their evaluated answer sheets and verify that their marks have been awarded correctly. For students who live far from campus, travelling long distances solely to inspect an answer sheet is inconvenient and often unnecessary.
 
 The existing process also relies heavily on the physical handling and management of a large number of answer sheets, making the review process less convenient for both students and faculty, and in some cases allowing students to overwrite their answer sheets.
 
-**### The Solution - SCBE**
+### The Solution - SCBE
 
 SCBE (Semi Computer Based Evaluation) is a platform which aims to digitize and streamline the post-examination answer-sheet review process.
 
@@ -23,7 +23,7 @@ Students will be able to view their evaluated answer sheets, verify their questi
 
 The platform is not intended to replace teachers or automatically evaluate handwritten answers. Instead, its goal is to make the evaluation-review process more accessible and transparent for students.
 
-**## Progress So Far**
+## Progress So Far
 
 As part of the initial requirements-gathering and validation process, we discussed the proposed system with faculty to understand the practical challenges that could arise during its adoption.
 
@@ -31,7 +31,7 @@ One of the primary concerns identified was the additional effort required to sca
 
 Further discussions with faculty and students will be used to refine the requirements and identify additional practical considerations before implementation.
 
-**## Team Members**
+## Team Members
 
 | Name | Roll Number | Role |
 |---|---|---|
@@ -41,7 +41,7 @@ Further discussions with faculty and students will be used to refine the require
 
 ---
 
-**### Project Supervision**
+### Project Supervision
 
 This project is being carried out under the supervision of:
 
