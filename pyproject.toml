@@ -4,7 +4,7 @@ requires = ["hatchling","hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "tiet-ucs503.github.io/ucs503p-202627odd-template"
+name = "SCBE (Semi Computer Based Evaluation)"
 version = "0.0.1"
 authors = [
   { name="Raghav B. Venkataramaiyer", email="bv.raghav@thapar.edu" },
@@ -13,7 +13,7 @@ authors = [
 #   { name="Raghav B. Venkataramaiyer",
 #     email="bvraghav@gmail.com" },
 # ]
-description = "UCS503 : Software Engineering : Project Sample"
+description = "UCS503 : Software Engineering Projet: SCBE (Semi Computer Based Evaluation)"
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
@@ -30,8 +30,8 @@ classifiers = [
 dependencies = ["click"]
 
 [project.urls]
-Homepage = "https://github.com/tiet-ucs503/ucs503p-202627odd-template"
-Issues = "https://github.com/tiet-unc512/ucs503p-202627odd-template/issues"
+Homepage = "https://github.com/timepassuser/ucs503p-202627-SCBE/"
+Issues = "https://github.com/timepassuser/ucs503p-202627-SCBE/issues"
 
 # Adapted from https://stackoverflow.com/a/50156706
 [tool.pytest.ini_options]
