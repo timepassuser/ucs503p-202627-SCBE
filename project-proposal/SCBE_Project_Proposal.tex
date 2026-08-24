@@ -1,0 +1,305 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{titling}
+
+% -----------------------------------------------------
+% bvraghav-tiet-ucs503p-article.sty
+% -----------------------------------------------------
+% Variable: Lab Instructor
+\makeatletter \newcommand{\BvrSetLabInstructor}[1]{%
+  \gdef\Bvr@LabInstructor{#1}}
+% default
+\newcommand{\Bvr@LabInstructor}{Dr. Raghav %
+  B. Venkataramaiyer}
+% public accessor
+\newcommand{\BvrLabInstructorValue}{\Bvr@LabInstructor}
+\makeatother
+% Add subtitle
+% -- Set title bold
+\pretitle{\begin{center}\bfseries\fontsize{18bp}{18bp}\selectfont}
+\makeatletter
+\newcommand{\BvrSubtitle}[1]{%
+  \posttitle{%
+    \par\end{center}
+    \begin{center}\large#1\end{center}
+    \vskip 0.5em}%
+}
+\makeatother
+
+% Hints in the section title(s)
+\newcommand{\BvrHint}[1]{%
+  {\normalfont\normalsize\itshape\hfill #1}}
+
+% RollNo. formatting command
+\newcommand{\rollno}[1]
+{Roll No: \texttt{#1}}
+% Email formatting command
+\newcommand{\email}[1]
+{Email: \texttt{\href{mailto:#1}{#1}}}
+% specify author
+\newcommand{\specifyauthor}[3]
+{\texttt{#1}, CSED\thanks{\rollno{#2}, \email{#3}}}
+
+% -----------------------------------------------------
+
+\title{SCBE (Semi Computer Based Evaluation)}
+\BvrSetLabInstructor{Dr. Raghav B. Venkataramaiyer}
+
+\BvrSubtitle{%
+  Project Proposal for UCS503P  \\
+  Submitted to: \BvrLabInstructorValue \\ \bfseries
+  Thapar Institute of Engineering and Technology%
+}
+
+% Add team name between subtitle and author list
+\renewcommand{\maketitlehookb}{%
+  \begin{center}
+    \large\textbf{Team Infinix}\par
+    \vspace{0.5em}
+  \end{center}
+}
+
+\setlength{\skip\footins}{4em}
+
+\author{
+  % \textbf{Team Infinix}\\[0.5em]
+  \specifyauthor{Gurneet Singh Ahuja}{1024170014}{gahuja\_be24@thapar.edu}
+  \and
+  \specifyauthor{Alla Harshith}{1024170007}{aharshith\_be24@thapar.edu}
+  \and
+  \specifyauthor{Arpit Goyal}{1024170021}{agoyal6\_be24@thapar.edu}
+}
+
+\date{\today}
+\begin{document}
+\maketitle
+
+\section{Higher-order goal}
+This project aims to increase transparency and trust in an institute's academic evaluation process by (i) making evaluated answer sheets easily accessible to every student, (ii) preserving the integrity of the original evaluation by reducing opportunities for tampering, and (iii) improving accountability by documenting the answer-sheet review process.
+
+\section{Time-to-value}
+\begin{itemize}[leftmargin=0.7cm]
+    \item We will prioritize the core answer-sheet access workflow first, allowing students to access their evaluated answer sheets remotely.
+    \item The initial version will focus on delivering the primary benefit of eliminating the need for students to physically return to campus solely to inspect their answer sheets, before expanding to review requests and other features.
+    \item Subsequent iterations will incorporate stakeholder feedback and progressively improve the review and other aspects of the platform.
+\end{itemize}
+
+\section{Problem Statement}
+After examinations are evaluated, students may need to return to campus to inspect their physical answer sheets if they want to verify their marks or raise a concern. This can require significant travel, time, and expense, particularly for students who live far from the institute. The physical nature of the process also creates concerns around maintaining the physical integrity of answer sheets and keeping a clear record of disputes between students and faculty.\\
+
+\textbf{Common pain points}
+\begin{itemize}[leftmargin=0.7cm]
+    \item Students may avoid inspecting their answer sheets because the time, effort, and expense of travelling to campus outweigh the perceived benefit.
+    \item Physical access to evaluated answer sheets creates an opportunity for students to tamper with the original answers, which can make faculty hesitant to accept claims about what was originally written.
+    \item The lack of a structured record of student concerns and faculty responses can make the review process less transparent and accountable.
+\end{itemize}
+
+\textbf{Why this matters}: Students should have a practical opportunity to verify their evaluation without unnecessary barriers and to ensure that their work has been evaluated fairly and without bias. A more accessible and accountable review process can increase transparency and trust in academic evaluation, while also protecting the physical integrity of the original evaluation.
+
+\section{Proposed Solution}
+\subsection{Overview}
+Build a \textbf{web-based} platform with the following components:
+\begin{itemize}[leftmargin=0.7cm]
+    \item \textbf{Faculty management portal:} faculty can upload, organize, and publish evaluated answer sheets.
+    \item \textbf{Student access portal:} students can access and review their own evaluated answer sheets.
+    \item \textbf{Review and grievance:} students can raise concerns regarding their evaluation, while faculty can review and respond to them.
+    \item \textbf{Answer-sheet management:} the platform organizes and associates scanned answer sheets with the appropriate students.
+    \item \textbf{Automatic answer-sheet identification:} the platform identifies the student associated with each uploaded answer sheet and allows faculty to verify or correct the association.
+\end{itemize}
+
+\subsection{Core workflow}
+\begin{enumerate}[leftmargin=0.7cm]
+    \item Faculty complete the evaluation of the answer sheets.
+    \item A dedicated assistant scans the evaluated answer sheets and uploads them to the platform.
+    \item The platform identifies the student associated with each answer sheet and organizes it under the appropriate examination and student record.
+    \item Faculty can verify or correct the associations before publishing the answer sheets.
+    \item Students can access and review their own evaluated answer sheets remotely.
+    \item Students can raise a review request regarding a specific concern, which faculty can review and resolve.
+\end{enumerate}
+
+\subsection{Operational constraints}
+\begin{itemize}[leftmargin=0.7cm]
+    \item The scanning process should be handled by a dedicated assistant so that it does not add significant workload to faculty.
+    \item Students must only be able to access their own evaluated answer sheets.
+    \item The platform should handle large batches of answer sheets without requiring faculty to manually organize individual documents.
+    \item Faculty should be able to override or correct the automatic association in case the information extracted from an answer sheet is incorrect, incomplete, or ambiguous.
+\end{itemize}
+
+\section{Solution Approach}
+This project focuses on implementing an end-to-end platform for digitizing and streamlining the post-examination answer-sheet review process using existing tools and technologies. The approach emphasizes practical software engineering, system usability, and integration with the existing examination workflow rather than research into novel algorithms.
+
+\subsection{Answer-sheet identification}
+\begin{itemize}[leftmargin=0.7cm]
+    \item The platform will use existing handwriting-recognition and document-understanding techniques to extract identifying information, such as the student's name and roll number, from uploaded answer sheets.
+    \item The extracted information will be matched against student records to automatically associate the answer sheet with the appropriate student.
+    \item Faculty will be able to verify and correct the automatically generated association before publication, particularly when the extracted information is missing, incorrect, or ambiguous.
+\end{itemize}
+
+\subsection{Web architecture}
+\begin{itemize}[leftmargin=0.7cm]
+    \item \textbf{Frontend:} Separate interfaces for students and faculty.
+    \item \textbf{Backend:} Authentication, answer-sheet management, publication, review requests, and faculty responses.
+    \item \textbf{Database and storage:} Student and examination metadata, answer-sheet associations, and review records, along with the scanned answer sheets.
+\end{itemize}
+
+\subsection{CI/CD, testing and security}
+\begin{itemize}[leftmargin=0.7cm]
+    \item Development will use version control, automated testing, and a repeatable deployment process to support incremental development and identify regressions early.
+    \item Core workflows such as answer-sheet identification, student access, faculty overrides, and review requests will be tested using representative data.
+    \item Security considerations will include protecting student information, evaluated answer sheets, marks, and review records throughout the system.
+\end{itemize}
+
+\section{Evaluation Criterion}
+We define success using measurable metrics tied to the core answer-sheet access and review workflow.
+
+\subsection{Primary evaluation metric}
+\textbf{Reduction in time spent accessing answer sheets:} The primary metric will measure the reduction in time required for students and faculty to access an evaluated answer sheet compared with the existing physical process.
+
+Let:
+\[
+T_c = T_{s,c} + T_{f,c}
+\]
+
+\[
+T_n = T_{s,n} + T_{f,n}
+\]
+
+% \begin{align*}
+% T_{s,c} \text{ is the average time required by a student to access answer sheets under the current process,}\\
+% T_{f,c} \text{ is the average time required by faculty to present answer sheets under the current process,}\\
+% \text{while } T_{s,n} \text{ and } T_{f,n} \text{ are the corresponding times using SCBE.}
+% \end{align*}
+
+\newenvironment{where}{\noindent{}where\begin{itemize}}{\end{itemize}}
+
+\begin{where}
+  \item $T_{s,c}$ is the average time required by a student to access answer sheets under the current process
+  \item $T_{f,c}$ is the average time required by faculty to present answer sheets under the current process,
+  \item $T_{s,n}$ and $T_{f,n}$ are the corresponding times using SCBE.
+\end{where}
+
+The percentage reduction will be calculated as:
+\[
+\text{Time Reduction} = \frac{T_c-T_n}{T_c}\times100
+\]
+
+\begin{itemize}[leftmargin=0.7cm]
+    \item \textbf{Target:} Achieve a minimum \textbf{50\% reduction} in the combined time required to access an answer sheet, i.e.:\\
+    \[\text{Time Reduction} \geq 50\%\]
+    \item \textbf{Attribution:} The reduction will be measured by comparing equivalent answer-sheet access tasks under the existing physical workflow and the SCBE workflow, while excluding the actual answer-sheet inspection time, which is common to both processes.
+\end{itemize}
+
+\subsection{Secondary evaluation metrics}
+\begin{itemize}[leftmargin=0.7cm]
+    \item \textbf{Answer-sheet identification accuracy:} Percentage of scanned answer sheets correctly associated with the corresponding student without requiring manual correction.
+    \item \textbf{Workflow correctness:} Successful completion of core workflows including uploading, identification, publication, student access, and review requests.
+    \item \textbf{Access control:} Verification that students can access only their own answer sheets and associated review information.
+    \item \textbf{Usability:} Feedback from students and faculty regarding the ease and practicality of completing common tasks.
+\end{itemize}
+
+\subsection{Pilot validation plan}
+\begin{itemize}[leftmargin=0.7cm]
+    \item A small-scale pilot will be conducted with approximately \textbf{10--20 students} using representative answer sheets and the SCBE prototype.
+    \item Participants will perform equivalent answer-sheet access tasks using the existing process and the SCBE workflow where practical.
+    \item The time taken for each workflow will be recorded to calculate the reduction in access time, while participant feedback will be collected to evaluate usability and identify areas for improvement.
+\end{itemize}
+
+\section{Scalability}
+\subsection{Theoretical Scalability}
+\begin{itemize}[leftmargin=0.7cm]
+    \item \textbf{Decoupled architecture:} The document-processing pipeline (scan upload, OCR, and student identification) will be separated from the web-serving layer. This allows document processing to scale independently from student access traffic, reducing the impact of large batch uploads on the student review experience.
+    \item \textbf{Stateless API design:} The backend will be designed to avoid dependence on server-side session affinity, allowing additional application instances to be deployed during high-traffic periods without requiring changes to the core application workflow.
+    \item \textbf{Answer-sheet storage:} Scanned answer sheets will be stored separately from the application and database data, allowing storage capacity to be increased independently as the number of documents grows.
+    \item \textbf{Database design:} Student records, examination metadata, and review requests will use appropriate indexing and bounded, paginated queries to support an archive that grows across multiple examinations and semesters.
+    \item \textbf{Asynchronous processing:} Answer-sheet identification and OCR will be handled as background processing tasks rather than blocking web requests. Processing capacity can therefore be increased independently as the volume of uploaded documents grows.
+    \item \textbf{Multiple institutes:} The platform can be extended to support multiple institutes while maintaining logical separation between their users, examinations, and answer sheets.
+\end{itemize}
+
+\subsection{Practical Scalability}
+\begin{itemize}[leftmargin=0.7cm]
+    \item \textbf{Prototype workload testing:} The prototype will be tested with progressively larger batches of scanned answer sheets and increasing numbers of concurrent users to identify practical throughput limits.
+    \item \textbf{Document delivery performance:} The system will be evaluated for response time and failure rates when multiple students access scanned answer sheets simultaneously. Compression and other document-optimization techniques can be considered if required.
+    \item \textbf{Hosted deployment:} The platform will be deployed on a hosted environment rather than only a local development server, allowing evaluation under realistic network and resource constraints.
+    \item \textbf{CI/CD pipeline:} Automated testing and deployment will be used to ensure that updates can be released consistently as the system develops and its workload increases.
+    \item \textbf{Resource monitoring:} CPU, memory, storage, and network usage will be monitored during load testing to identify bottlenecks and determine where additional capacity would be required.
+\end{itemize}
+
+\section{Engine Availability Heuristic}
+The project will rely primarily on existing and readily available technologies rather than developing foundational components from scratch. Suitable technologies and frameworks are available for each major component of the proposed system.
+
+\begin{itemize}[leftmargin=0.7cm]
+    \item \textbf{Handwriting recognition and document understanding:} Existing OCR and handwriting-recognition technologies such as Tesseract, PaddleOCR, and TrOCR can be used to extract handwritten names and roll numbers from scanned answer sheets.
+    \item \textbf{Frontend:} Established web frameworks such as React and Next.js can be used to develop the student and faculty interfaces.
+    \item \textbf{Backend:} Established server-side technologies such as Node.js with Express or NestJS can be used to implement the application backend and its associated workflows.
+    \item \textbf{Authentication and access control:} Existing authentication solutions such as Auth.js, Keycloak, Clerk, and Supabase Auth provide mechanisms for authentication and role-based access control.
+    \item \textbf{Infrastructure and deployment:} Cloud and hosting platforms such as AWS, Google Cloud, and Vercel provide the required infrastructure for hosting the application, database, and document storage.
+    \item \textbf{Fallback handling:} Since handwritten information extraction may not always be reliable, the system will allow faculty to verify and manually correct automatically generated student associations.
+\end{itemize}
+
+\section{Project scope and deliverables}
+\subsection{Initial deliverables}
+\begin{itemize}[leftmargin=0.7cm]
+    \item Faculty and student authentication with appropriate access controls.
+    \item Faculty workflow for uploading and managing evaluated answer sheets.
+    \item Student interface for accessing and viewing their own evaluated answer sheets.
+    \item Student workflow for submitting review requests regarding their evaluation.
+    \item Faculty workflow for reviewing and responding to student requests.
+    \item Recording of review requests, faculty responses, and resolutions.
+    \item CI/CD with automated testing and repeatable deployment to a hosted staging environment.
+\end{itemize}
+
+\subsection{Subsequent deliverables}
+\begin{itemize}[leftmargin=0.7cm]
+    \item Automatic association of answer sheets with the appropriate student.
+    \item Faculty verification and correction of automatically generated associations.
+    \item Testing with larger batches of answer sheets and concurrent users.
+    \item Documentation of requirements, workflows, design decisions, testing results, deployment, and known limitations.
+\end{itemize}
+
+\section{Costs, Risks and Mitigations}
+\subsection{Costs}
+\begin{itemize}[leftmargin=0.7cm]
+    \item \textbf{Scanning:} A dedicated assistant will be required to scan and upload evaluated answer sheets. This introduces an additional operational cost and workload for the institute, but avoids placing the scanning burden on faculty.
+    \item \textbf{Storage and hosting:} Scanned answer sheets will require persistent storage and hosted infrastructure. Costs will depend on the number and size of documents and the scale of deployment.
+\end{itemize}
+
+\subsection{Risks and Mitigations}
+
+\renewcommand{\arraystretch}{2}
+\begin{tabularx}{\textwidth}{@{}p{0.45\textwidth}X@{}}
+% \begin{tabularx}{\textwidth}{|X|X|}
+\textbf{Risk} & \textbf{Mitigation} \\
+\midrule
+\textbf{Scanning workload:} A large number of answer sheets may make scanning time-consuming for the dedicated assistant.
+&
+Support batch scanning and processing, and optimize the workflow to minimize manual handling of individual documents.
+\\[1.5em]
+
+\textbf{Handwriting recognition and identification errors:} Handwritten names and roll numbers may not always be extracted correctly, potentially resulting in an answer sheet being associated with the wrong student.
+&
+Use existing handwriting-recognition techniques and require faculty verification before an answer sheet is published. Faculty will also be able to correct or manually override automatically generated associations.
+\\[1.5em]
+
+\textbf{Privacy and unauthorized access:} Answer sheets contain students' personal information, marks, and evaluation records.
+&
+Implement authentication and role-based access controls and restrict each student's access to their own records.
+\\[1.5em]
+
+\textbf{Poor scan quality or incomplete documents:} Blurry scans, missing pages, or incorrectly scanned sheets may affect usability and identification.
+&
+Provide checks for uploaded documents and allow problematic sheets to be flagged for manual correction or re-upload.
+\\
+\bottomrule
+\end{tabularx}
+
+\section{Summary}
+SCBE (Semi Computer Based Evaluation) aims to digitize and streamline the post-examination answer-sheet review process. By providing students with remote access to their evaluated answer sheets, the platform can reduce unnecessary travel and effort while improving transparency and trust in academic evaluation. The system will also preserve the integrity of original answer sheets and provide a documented process for handling review requests.
+
+The project will develop a functional web-based prototype covering the core student and faculty workflows, with automatic answer-sheet identification and other capabilities added incrementally. The system will be evaluated based on its reduction in time required to access answer sheets, correctness of its core workflows, identification accuracy, access control, and usability. The proposed architecture will allow the platform to scale beyond the prototype, while identified operational costs and risks will be addressed through appropriate mitigations.
+
+\end{document}
