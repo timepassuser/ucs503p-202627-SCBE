@@ -1,0 +1,19 @@
+RESOLVED: The blank-canvas-until-toolbar-interaction bug is fixed in
+`code/frontend/src/pages/viewer.jsx`. The old fix attempted to find and click
+a "sidebar" toggle button by scanning the DOM for button text/aria-labels,
+which was fragile and didn't reliably match the actual toolbar markup.
+
+The real fix nudges the zoom level through EmbedPDF's own zoom capability
+(`registry.getCapabilityProvider("zoom").provides()`) right after the viewer
+becomes ready, forcing the same internal re-measure/re-render pass that a
+manual zoom triggers, then restores the original zoom level. This uses the
+library's public API instead of guessing at toolbar DOM structure.
+
+Also fixed: `getCapabilityProvider(...)` returns the plugin instance, not the
+capability object -- you must call `.provides()` on it to get the callable
+capability (commit, exportAnnotations, saveAsCopy, importAnnotations, etc).
+The previous code called these methods directly on the plugin instance, which
+silently no-op'd, so annotations were never actually committed or exported
+when a student submitted a complaint. Additionally, `commit()`/`saveAsCopy()`/
+`exportAnnotations()` return EmbedPDF `Task` objects rather than native
+Promises, so `.toPromise()` must be called before awaiting them.

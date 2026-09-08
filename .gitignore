@@ -2,6 +2,10 @@
 ## ----------------------------------------------------
 
 ﻿assets/icons/
+code/data/
+code/backend/node_modules/
+code/frontend/node_modules/
+code/frontend/dist/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

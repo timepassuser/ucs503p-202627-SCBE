@@ -19,6 +19,21 @@ The documentation is under folder `docs`.
 All other aspects of code organisation are left to the
 discretion of the user(s).
 
+## Quick reset
+
+If you want to clear all local app data and reseed two
+test accounts from scratch, run:
+
+```shell
+node code/quick_sample.js
+```
+
+This recreates the SQLite database and seeds:
+- `test_student_one` / `Test Student One`
+- `test_faculty_one` / `Test Faculty One`
+
+Both use their ID as the password.
+
 
 ## Docs
 

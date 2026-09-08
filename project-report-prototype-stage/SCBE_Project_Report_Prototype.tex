@@ -1,0 +1,457 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{titling}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{ragged2e}
+\emergencystretch=2em
+
+% -----------------------------------------------------
+% bvraghav-tiet-ucs503p-article.sty (as used in the proposal)
+% -----------------------------------------------------
+\makeatletter \newcommand{\BvrSetLabInstructor}[1]{%
+  \gdef\Bvr@LabInstructor{#1}}
+\newcommand{\Bvr@LabInstructor}{Dr. Raghav %
+  B. Venkataramaiyer}
+\newcommand{\BvrLabInstructorValue}{\Bvr@LabInstructor}
+\makeatother
+\pretitle{\begin{center}\bfseries\fontsize{18bp}{18bp}\selectfont}
+\makeatletter
+\newcommand{\BvrSubtitle}[1]{%
+  \posttitle{%
+    \par\end{center}
+    \begin{center}\large#1\end{center}
+    \vskip 0.5em}%
+}
+\makeatother
+
+\newcommand{\BvrHint}[1]{%
+  {\normalfont\normalsize\itshape\hfill #1}}
+
+\newcommand{\rollno}[1]
+{Roll No: \texttt{#1}}
+\newcommand{\email}[1]
+{Email: \texttt{\href{mailto:#1}{#1}}}
+\newcommand{\specifyauthor}[3]
+{\texttt{#1}, CSED\thanks{\rollno{#2}, \email{#3}}}
+
+% -----------------------------------------------------
+
+\title{SCBE (Semi Computer Based Evaluation)}
+\BvrSetLabInstructor{Dr. Raghav B. Venkataramaiyer}
+
+\BvrSubtitle{%
+  Project Report --- Prototype Stage, for UCS503P \\
+  Submitted to: \BvrLabInstructorValue \\ \bfseries
+  Thapar Institute of Engineering and Technology%
+}
+
+\renewcommand{\maketitlehookb}{%
+  \begin{center}
+    \large\textbf{Team Infinix}\par
+    \vspace{0.5em}
+  \end{center}
+}
+
+\setlength{\skip\footins}{4em}
+
+\author{
+  \specifyauthor{Gurneet Singh Ahuja}{1024170014}{gahuja\_be24@thapar.edu}
+  \and
+  \specifyauthor{Alla Harshith}{1024170007}{aharshith\_be24@thapar.edu}
+  \and
+  \specifyauthor{Arpit Goyal}{1024170021}{agoyal6\_be24@thapar.edu}
+}
+
+\date{\today}
+\begin{document}
+\maketitle
+\tableofcontents
+\vspace{1em}
+
+\section{Introduction}
+
+SCBE (Semi Computer Based Evaluation) is a platform for digitizing the post-examination
+answer-sheet review process. In the workflow the platform targets, faculty capture a
+student's physical answer booklet as a short video or a set of photographs; the platform
+assembles these captures into a single PDF, lets faculty attach the sheet to the correct
+student and examination, and publishes it so the student can view and annotate their own
+evaluated answer sheet remotely. If a student disagrees with part of the evaluation, they
+can raise a complaint directly on the annotated page, and the faculty member can review and
+resolve it from their own dashboard. The proposal framed this as a way to cut down on the
+travel, delay, and lack of a paper trail that come with the existing practice of physically
+re-checking answer sheets on campus.
+
+Since the proposal, the team has built a working three-tier prototype -- a Python/OpenCV
+service that turns raw video or images into a paginated PDF, a Node.js/Express backend that
+owns authentication, data persistence and orchestration, and a React frontend with
+role-specific dashboards for students, faculty, and an examination-cell admin. This report
+describes what has actually been implemented, how the pieces fit together, and what has
+changed relative to the original plan.
+
+\subsection{Objectives: status at the prototype stage}
+
+\begin{longtable}{>{\RaggedRight}p{0.40\textwidth} >{\RaggedRight}p{0.12\textwidth} >{\RaggedRight}p{0.40\textwidth}}
+\toprule
+\textbf{Objective (from proposal)} & \textbf{Status} & \textbf{Notes} \\
+\midrule\endhead
+Faculty and student authentication with access controls & Met &
+  Role-based login/registration (student, faculty, admin) with salted, hashed
+  passwords; routes are scoped per role and per record owner. \\[0.6em]
+Faculty workflow for uploading and managing evaluated answer sheets & Met &
+  Video-to-PDF and images-to-PDF conversion, plus page-level add/delete/replace
+  editing, are implemented end to end. \\[0.6em]
+Student interface for accessing and viewing evaluated sheets & Met &
+  In-browser PDF viewer with per-question mark totals and evaluation
+  breakdown. \\[0.6em]
+Student workflow for raising review requests & Met &
+  Students annotate directly on the PDF and submit a complaint tied to a
+  specific question and the annotated page. \\[0.6em]
+Faculty workflow for reviewing and responding to requests & Met &
+  Faculty can inspect the annotated PDF, change complaint status
+  (Pending / Under Review / Resolved / Rejected), and attach a comment. \\[0.6em]
+Recording of requests, responses, and resolutions & Met &
+  Persisted in a relational schema (complaints, discrepancies, notifications)
+  with an audit trail of status changes. \\[0.6em]
+CI/CD with automated testing to a hosted staging environment & Not started &
+  Deferred; the prototype currently runs from local processes only. See
+  Section~\ref{sec:limitations}. \\[0.6em]
+Automatic association of answer sheets with the correct student (OCR) & Partially met &
+  The database and API already carry \texttt{detectedRollNumber} /
+  \texttt{detectedName} fields, but the OCR/handwriting-recognition step that
+  should populate them has not been built yet; faculty currently assign each
+  sheet to a student manually. \\[0.6em]
+Faculty verification/correction of automatic associations & Deferred &
+  Depends on the OCR step above; the manual assignment screen that will later
+  serve as the ``correction'' step already exists. \\
+\bottomrule
+\end{longtable}
+
+The most significant deviation from the proposal is on automatic
+answer-sheet identification. The proposal treated OCR-based name/roll-number
+extraction as part of the initial deliverables; in practice the team
+prioritized getting the full manual pipeline -- capture, convert, assign,
+publish, review, complain, resolve -- working reliably first, and pushed OCR
+to the next iteration. This is discussed further in Section~\ref{sec:challenges}.
+
+\section{System Architecture}
+
+The prototype is organised as three independently runnable services that
+communicate over HTTP, matching the decoupled, stateless design the proposal
+argued for on scalability grounds.
+
+\begin{center}
+\texttt{React frontend (Vite)} $\;\longrightarrow\;$
+\texttt{Node.js/Express backend (port 4000)} $\;\longrightarrow\;$
+\texttt{Flask/OpenCV CV service (port 5000)}
+\end{center}
+
+\begin{itemize}[leftmargin=0.7cm]
+  \item \textbf{Frontend (React + Vite):} role-specific pages for students,
+    faculty, and admins, an in-browser PDF viewer/annotator
+    (\texttt{@embedpdf/react-pdf-viewer}), and a thin \texttt{api.js} client
+    that talks to the backend.
+  \item \textbf{Backend (Node.js + Express):} authentication, the
+    \texttt{users}/\texttt{courses}/\texttt{exams}/\texttt{sheets}/\texttt{complaints}/
+    \texttt{discrepancies}/\texttt{notifications} data model, file storage for
+    uploaded and generated documents, and a thin proxy layer that forwards
+    capture jobs to the CV service.
+  \item \textbf{CV service (Python + Flask + OpenCV):} stateless
+    image/video-processing routes that turn a video or a set of images into a
+    PDF, and that perform page-level edits (delete/add/replace) on an existing
+    PDF.
+  \item \textbf{Storage:} a single SQLite database (\texttt{scbe.sqlite}, in
+    WAL mode) for structured data, and a directory tree on disk for uploaded
+    videos/images and generated original/annotated PDFs.
+\end{itemize}
+
+\subsection{Core workflow as implemented}
+
+\begin{enumerate}[leftmargin=0.7cm]
+  \item Faculty record a short video (or take photos) of the evaluated answer
+    booklet and upload it from the \emph{Upload} screen.
+  \item The backend streams the file to the CV service, which returns a
+    generated PDF; the backend stores the PDF and creates an unassigned
+    \texttt{sheet} row.
+  \item From the \emph{Assign} screen, faculty attach the sheet to a
+    student and an exam (roll number/name can currently be entered manually;
+    see Section~\ref{sec:limitations} on OCR).
+  \item Faculty publish the sheet, which triggers a notification to the
+    student and makes the sheet visible on their dashboard.
+  \item The student opens the sheet in the PDF viewer, sees the per-question
+    marks and total, and can annotate a page and raise a complaint about a
+    specific question.
+  \item The complaint (with the flattened annotated PDF and the raw
+    annotation JSON) lands on the faculty's complaint queue; the faculty
+    member reviews it in the same viewer, changes its status, and adds a
+    resolution comment, which the student can then see.
+\end{enumerate}
+
+\subsection{Technical stack}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{p{0.28\textwidth} p{0.62\textwidth}}
+\toprule
+\textbf{Component} & \textbf{Technology} \\
+\midrule
+Frontend & React 18, React Router, Vite \\
+PDF viewing/annotation & \texttt{@embedpdf/react-pdf-viewer} (PDFium/WASM) \\
+Backend & Node.js, Express, Multer (file uploads) \\
+Database & SQLite (\texttt{node:sqlite}, WAL mode) \\
+Password storage & \texttt{scrypt} key derivation with per-user salt \\
+CV / document assembly & Python, Flask, Flask-CORS \\
+Frame processing & OpenCV (\texttt{opencv-python-headless}), NumPy \\
+Image/PDF assembly & Pillow, PyPDF2 \\
+\bottomrule
+\end{tabular}
+\caption{Technical stack used in the prototype}
+\end{table}
+
+\section{Module-by-Module Implementation}
+
+\subsection{Video/image-to-PDF conversion}
+
+This is the module that most directly replaces the proposal's ``dedicated
+assistant scans the sheets'' step. Rather than requiring faculty to pick out
+individual page photographs by hand, the CV service accepts a single video of
+the whole booklet being flipped through and extracts one clean frame per
+page.
+
+The extraction logic samples the incoming video at a fixed rate
+(default 20 fps) and tracks a simple two-state machine per sampled frame:
+
+\begin{itemize}[leftmargin=0.7cm]
+  \item \textbf{STABLE:} the camera/page is holding still. Every sampled frame
+    is kept as a candidate for the current page, scored by a Laplacian-variance
+    sharpness measure (a common focus-quality heuristic: a sharper image has
+    more high-frequency edge content, hence higher Laplacian variance).
+  \item \textbf{FLIPPING:} consecutive frame-to-frame differences (mean
+    absolute pixel difference on grayscale frames) exceed a threshold for
+    enough consecutive samples, which is taken as evidence that a page turn is
+    in progress.
+\end{itemize}
+
+When the frame difference stays low for long enough after a flip, the state
+returns to STABLE and a new page begins accumulating candidates. When a flip
+is detected, the sharpest candidate frame collected during the previous
+STABLE run is committed as a finished page. All committed frames are finally
+stitched, in order, into a single multi-page PDF. Sample rate, the
+difference threshold, and the number of consecutive frames required to
+confirm a flip or a stabilization are all exposed as tunable parameters on
+the API rather than hard-coded, which was useful during testing under
+different lighting and camera-shake conditions.
+
+The same service also accepts a batch of individual page images directly
+(for faculty who prefer photographing pages one at a time) and stitches them
+into a PDF in upload order, and it can delete, insert, or replace a single
+page of an already-generated PDF -- used when a page was mis-captured and
+needs to be redone without regenerating the whole document.
+
+\subsection{Backend orchestration and data model}
+
+The Node backend does not perform any image processing itself; it is
+responsible for authentication, persistence, and gluing the frontend to the
+CV service. Uploaded video/image files are received with Multer, forwarded
+to the CV service as \texttt{multipart/form-data}, and the resulting PDF is
+copied into a durable \texttt{generated/pdfs/originals} directory referenced
+by a new \texttt{sheets} row.
+
+The schema (SQLite) currently has seven tables: \texttt{users},
+\texttt{courses}, \texttt{exams}, \texttt{sheets}, \texttt{discrepancies},
+\texttt{notifications}, \texttt{complaints}, and a small \texttt{meta} table
+used for lightweight schema-version bookkeeping. The \texttt{sheets} table
+already carries \texttt{detectedRollNumber} and \texttt{detectedName}
+columns, reflecting the planned OCR integration, even though nothing writes
+to them automatically yet -- they are filled in by faculty through the
+manual assignment endpoint. Passwords are never stored in plaintext:
+each user gets a random salt, and the derived \texttt{scrypt} hash is
+compared using a constant-time comparison to reduce timing side-channels.
+
+\subsection{Annotation and complaint capture}
+
+Students view their sheet using \texttt{@embedpdf/react-pdf-viewer}, which
+runs PDF rendering through a PDFium WebAssembly build in the browser rather
+than round-tripping page images through the server. When a student opens the
+complaint form on a page, the viewer's annotation plugin exports the
+annotation set for that document (through its \texttt{exportAnnotations}
+capability); the frontend attaches this JSON alongside the already-flattened,
+annotated PDF and the complaint title/description, and posts it as a single
+multipart request. This gives the faculty member two views of the same
+concern when they open the complaint later: the flattened PDF (a durable
+record that cannot be re-edited after submission) and the structured
+annotation data (useful if the interface ever needs to re-render annotations
+interactively instead of only showing the flattened image).
+
+\subsection{Faculty and student dashboards}
+
+Faculty have four working screens: a dashboard summarising counts and recent
+resolved complaints, a sheets list (assigned/unassigned, with per-sheet
+publish and reassignment actions), the capture/upload screen described
+above, and a complaint inbox with status transitions
+(\emph{Pending} $\to$ \emph{Under Review} $\to$ \emph{Resolved}/\emph{Rejected}).
+Students have a matching set: dashboard, sheet list, the annotated PDF
+viewer with the complaint form, a list of their own submitted complaints
+with status, and notifications. The admin role currently exposes read-only
+aggregate views (student/faculty counts, examinations, and a global list of
+answer sheets) for the examination cell to get a bird's-eye view of platform
+activity; write operations for admins (e.g. course/exam management from the
+UI) are not yet implemented.
+
+\section{Testing and Validation}
+\label{sec:testing}
+
+Formal automated CI/CD and a load-tested staging deployment were listed in
+the proposal as initial deliverables but have not been reached at this
+stage; testing so far has been manual and workflow-oriented rather than
+based on an automated test suite. The team exercised the following
+scenarios directly against the running services:
+
+\begin{itemize}[leftmargin=0.7cm]
+  \item \textbf{End-to-end happy path:} register a faculty and a student
+    account, upload a sample video of a mock answer booklet, confirm a PDF is
+    generated, assign it to the student, publish it, and confirm it appears
+    on the student's dashboard.
+  \item \textbf{Page-extraction quality:} varied the sample video's flip
+    speed and lighting to check that the difference-threshold/sharpness
+    heuristic still picks one legible frame per page; very fast flips or low
+    light occasionally required raising \texttt{sample\_fps} or lowering
+    \texttt{difference\_threshold} for reliable page separation.
+  \item \textbf{PDF page editing:} deleted, inserted, and replaced a page on
+    an already-generated PDF and confirmed the page count and page order in
+    the output.
+  \item \textbf{Complaint round-trip:} annotated a sheet as a student,
+    submitted a complaint, confirmed the faculty inbox received it with the
+    flattened PDF intact, changed its status with a comment, and confirmed
+    the status/comment appeared back on the student side.
+  \item \textbf{Access control:} confirmed a student cannot open another
+    student's sheet or complain about a sheet that is not theirs, and that
+    role-scoped routes reject requests for a user id/role that do not match
+    the record (e.g. a student id used against a faculty-only route).
+\end{itemize}
+
+No formal performance benchmarking (throughput under concurrent uploads,
+response time under load) has been carried out yet; the proposal's
+``prototype workload testing'' and ``document delivery performance'' items
+under Practical Scalability remain future work, as does the hosted
+deployment needed to test under realistic network conditions.
+
+\subsection{Result: what currently works vs.\ what does not}
+
+\begin{longtable}{>{\RaggedRight}p{0.44\textwidth} >{\RaggedRight}p{0.12\textwidth} >{\RaggedRight}p{0.36\textwidth}}
+\toprule
+\textbf{Capability} & \textbf{Result} & \textbf{Notes} \\
+\midrule\endhead
+Video $\to$ PDF conversion & Pass &
+  Reliable for moderate flip speed and adequate lighting. \\[0.4em]
+Images $\to$ PDF conversion & Pass &
+  Direct, order-preserving stitching. \\[0.4em]
+PDF page delete/add/replace & Pass &
+  Verified against multi-page sample PDFs. \\[0.4em]
+Manual sheet assignment \& publish & Pass &
+  Notification is created and appears for the student. \\[0.4em]
+Student annotation \& complaint submission & Pass &
+  Flattened PDF and annotation JSON both persisted. \\[0.4em]
+Faculty complaint review/resolution & Pass &
+  Status and resolution comment both round-trip to the student view. \\[0.4em]
+Per-student/per-role access control & Pass (spot-checked) &
+  No automated authorization test suite yet. \\[0.4em]
+Automatic student identification (OCR) & Not implemented &
+  Field exists in schema; extraction pipeline not built. \\[0.4em]
+CI/CD and hosted deployment & Not implemented &
+  Prototype currently runs from local processes only. \\
+\bottomrule
+\end{longtable}
+
+\section{Challenges and Mitigations}
+\label{sec:challenges}
+
+\begin{itemize}[leftmargin=0.7cm]
+  \item \textbf{Separating a genuine page turn from camera shake.} An early
+    version of the video-processing heuristic mistook ordinary camera wobble
+    for a page flip, which fragmented single pages into several spurious
+    ``pages''. Requiring several consecutive frames to cross the difference
+    threshold before committing to a flip (rather than reacting to a single
+    frame) removed most of the false positives without needing a heavier
+    motion-tracking model.
+  \item \textbf{Choosing a representative frame per page.} Even within a
+    stable interval, individual frames vary in focus. Scoring every candidate
+    frame with a Laplacian-sharpness measure and keeping the sharpest one per
+    page gave a consistent improvement over simply taking the first or last
+    frame of the interval.
+  \item \textbf{Deferring OCR-based identification.} The proposal's
+    ``automatic answer-sheet identification'' component turned out to need
+    more groundwork (a labelled dataset of the institute's roll-number/name
+    formats, and a decision on which handwriting-recognition engine to
+    integrate) than the other, more mechanical parts of the pipeline. Rather
+    than block the rest of the prototype on this, the team built the manual
+    assignment path first and designed the schema
+    (\texttt{detectedRollNumber}, \texttt{detectedName}) so that an OCR step
+    can later populate the same fields the manual path already writes to,
+    with faculty verification staying in the loop exactly as the proposal's
+    fallback-handling plan intended.
+  \item \textbf{Keeping the annotated record trustworthy.} Because a
+    complaint doubles as an integrity record of what the student is disputing,
+    the frontend submits a flattened, already-rendered PDF snapshot rather
+    than only the editable annotation JSON, so a later change to the viewer
+    or a client-side bug cannot silently alter what was submitted at
+    complaint time.
+\end{itemize}
+
+\section{Limitations}
+\label{sec:limitations}
+
+\begin{itemize}[leftmargin=0.7cm]
+  \item Answer-sheet–to–student association is manual; there is no automatic
+    OCR/handwriting-recognition step yet, so the ``identification accuracy''
+    metric from the proposal cannot be measured at this stage.
+  \item There is no CI/CD pipeline or hosted staging deployment; the system
+    has only been run and tested locally.
+  \item No automated test suite (unit or integration) exists yet; validation
+    so far has been manual, scenario-based testing as described in
+    Section~\ref{sec:testing}.
+  \item The admin role is read-only in the current UI.
+  \item Performance/scalability has not been measured under concurrent load
+    or with large batches of sheets.
+\end{itemize}
+
+\section{Conclusion and Future Work}
+
+The prototype demonstrates a complete, working loop for the core workflow the
+proposal set out to build: faculty can turn a recorded video of a physical
+answer booklet into a digital PDF, attach it to the right student, publish
+it, and handle any resulting dispute through an auditable
+annotate-complain-resolve cycle, all without a student needing to visit
+campus. The main piece of the original proposal not yet delivered is
+automatic student identification from the scanned sheet; everything around
+it -- the schema fields, the manual verification/override screen, and the
+downstream publish/notify pipeline -- is already in place to receive it.
+
+Planned next steps, in rough priority order, are:
+
+\begin{enumerate}[leftmargin=0.7cm]
+  \item Integrate a handwriting-recognition/OCR step (e.g.\ Tesseract,
+    PaddleOCR, or TrOCR, as originally scoped) to populate
+    \texttt{detectedRollNumber}/\texttt{detectedName} automatically, with the
+    existing manual-assignment screen repurposed as the faculty
+    verification/correction step.
+  \item Add automated tests (unit tests for the CV heuristics and page-edit
+    operations, integration tests for the core API routes) and a basic CI
+    pipeline.
+  \item Move from local processes to a hosted staging deployment, and run the
+    pilot validation plan described in the proposal (10--20 students,
+    timed comparison against the physical process).
+  \item Benchmark the CV service and backend under concurrent uploads and
+    concurrent PDF downloads to establish real throughput numbers ahead of
+    the proposal's scalability claims.
+  \item Extend the admin role beyond read-only dashboards (course/exam
+    management, user administration).
+\end{enumerate}
+
+\end{document}
