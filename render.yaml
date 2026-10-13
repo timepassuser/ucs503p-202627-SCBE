@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: scbe
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter            # persistent disks need a paid plan; bump to standard if video processing OOMs
+    healthCheckPath: /api/health
+    autoDeploy: true
+    # Only rebuild when app code changes -- docs/journals/report commits are ignored
+    buildFilter:
+      paths:
+        - code/**
+        - Dockerfile
+        - .dockerignore
+        - render.yaml
+      ignoredPaths:
+        - code/data/**
+    disk:
+      name: scbe-data
+      mountPath: /app/code/data   # SQLite DB + uploaded videos/images + generated PDFs
+      sizeGB: 5

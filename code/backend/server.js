@@ -948,6 +948,17 @@ app.get("/api/admin/answer-sheets", (_req, res) => {
   res.json(sheets);
 });
 
+// Serve the built React app (production only; in dev Vite serves it).
+// Must stay AFTER all /api and /files routes.
+const FRONTEND_DIST = path.join(CODE_DIR, "frontend", "dist");
+if (fs.existsSync(FRONTEND_DIST)) {
+  app.use(express.static(FRONTEND_DIST));
+  // SPA fallback for react-router paths (but never swallow API/file 404s)
+  app.get(/^\/(?!api\/|files\/).*/, (_req, res) => {
+    res.sendFile(path.join(FRONTEND_DIST, "index.html"));
+  });
+}
+
 app.listen(PORT, HOST, () => {
   console.log(`SCBE backend running at http://${HOST}:${PORT}`);
 });

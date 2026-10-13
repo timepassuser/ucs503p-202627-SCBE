@@ -1,0 +1,17 @@
+.git
+.github
+docs
+assets
+journals
+codeprev
+project-proposal
+project-report-final
+project-report-prototype-stage
+mkdocs.yml
+Makefile
+pyproject.toml
+README.md
+**/node_modules
+code/data
+code/frontend/dist
+**/__pycache__
