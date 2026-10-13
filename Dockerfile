@@ -24,6 +24,7 @@ RUN cd frontend && npm run build && rm -rf node_modules
 # --- App source
 COPY code/backend backend
 COPY code/cv cv
+COPY code/quick_sample.js quick_sample.js
 COPY code/start.sh start.sh
 RUN chmod +x start.sh
 

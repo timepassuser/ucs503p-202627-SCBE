@@ -6,6 +6,9 @@ cd "$(dirname "$0")"
 # Disk mounts at runtime, so create data dirs here (Flask only does this under __main__)
 mkdir -p data/generated/pdfs data/uploaded/videos data/uploaded/images data/uploaded/pdfs
 
+# Free plan has no disk: DB starts empty each boot, so seed the demo accounts
+[ -f data/scbe.sqlite ] || node quick_sample.js
+
 # Python CV on 127.0.0.1:5000. 1 worker + threads keeps OpenCV memory bounded;
 # long timeout because video->PDF extraction can take minutes.
 ( cd cv && exec /opt/venv/bin/gunicorn app:app \
