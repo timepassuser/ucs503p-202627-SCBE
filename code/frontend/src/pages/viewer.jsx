@@ -1,16 +1,21 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { PDFViewer } from "@embedpdf/react-pdf-viewer";
+import { PDFViewer, ZoomMode } from "@embedpdf/react-pdf-viewer";
 import { api } from "../api.js";
 import { useResource } from "../hooks.js";
 import { AppShell } from "../components/layout.jsx";
 import { Loading, StatusPill } from "../components/ui.jsx";
 
-function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = false }) {
+function ViewerFrame({
+  user,
+  onLogout,
+  sheet,
+  title,
+  allowComplaintSubmit = false,
+}) {
   const location = useLocation();
   const complaintId = new URLSearchParams(location.search).get("complaintId");
   const viewerRef = useRef(null);
-  const viewerHostRef = useRef(null);
   const [viewerRegistry, setViewerRegistry] = useState(null);
   const [complaintContext, setComplaintContext] = useState(null);
   const rawPdfUrl =
@@ -21,8 +26,6 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
   const [pdfUrl, setPdfUrl] = useState("");
   const [pdfError, setPdfError] = useState("");
   const [loadingPdf, setLoadingPdf] = useState(Boolean(rawPdfUrl));
-  const [viewerKey, setViewerKey] = useState(0);
-  const [viewerMounted, setViewerMounted] = useState(false);
   const [complaintOpen, setComplaintOpen] = useState(false);
   const [complaintTitle, setComplaintTitle] = useState("");
   const [complaintDescription, setComplaintDescription] = useState("");
@@ -43,7 +46,10 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
       setComplaintContext(null);
       return;
     }
-    api.facultyComplaint(user.id, complaintId).then(setComplaintContext).catch(() => setComplaintContext(null));
+    api
+      .facultyComplaint(user.id, complaintId)
+      .then(setComplaintContext)
+      .catch(() => setComplaintContext(null));
   }, [complaintId, user.id, user.role]);
 
   useEffect(() => {
@@ -69,7 +75,6 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
         objectUrl = URL.createObjectURL(blob);
         if (active) {
           setPdfUrl(objectUrl);
-          setViewerKey((current) => current + 1);
         }
       } catch (error) {
         if (active) {
@@ -93,104 +98,6 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
     };
   }, [rawPdfUrl]);
 
-  useLayoutEffect(() => {
-    if (!pdfUrl || !viewerMounted) return;
-
-    // EmbedPDF's page canvases are painted based on the visible/tiled range
-    // it computes from a ResizeObserver on its internal scroll container.
-    // That observer only reacts to a genuine change in the observed
-    // element's box size — dispatching a synthetic window "resize" event
-    // (the old approach) does nothing, because nothing is actually
-    // listening for that event. This matches what's observed manually:
-    // zooming or toggling the sidebar both change the size of the space
-    // available to the viewer, which is what actually triggers the
-    // repaint. We reproduce that here by nudging the width of the host
-    // element we control (which the EmbedPDF container fills at 100%),
-    // forcing a real, measurable resize the observer will pick up. As a
-    // second, independent trigger we also nudge the scroll position of
-    // EmbedPDF's own internal scroll container (reached through its open
-    // shadow root), since some virtualization passes are keyed off scroll
-    // position rather than size.
-    let cancelled = false;
-    let retryTimer = null;
-    let fallbackTimer = null;
-
-    const findScrollableDescendant = (root) => {
-      if (!root) return null;
-      const candidates = root.querySelectorAll("*");
-      for (const element of candidates) {
-        if (element.scrollHeight > element.clientHeight + 1 || element.scrollWidth > element.clientWidth + 1) {
-          return element;
-        }
-      }
-      return null;
-    };
-
-    const nudge = () => {
-      const host = viewerHostRef.current;
-      if (!host || cancelled) return false;
-
-      const original = host.style.width;
-      host.style.width = "calc(100% - 1px)";
-      // Reading a layout property forces the browser to flush layout
-      // synchronously, so the shrink above is observed as a real resize
-      // before we immediately restore the original width on the next frame.
-      // eslint-disable-next-line no-unused-expressions
-      host.offsetWidth;
-      requestAnimationFrame(() => {
-        if (cancelled) return;
-        host.style.width = original;
-      });
-
-      const embedElement = viewerRef.current?.container;
-      const scrollable = embedElement?.shadowRoot ? findScrollableDescendant(embedElement.shadowRoot) : null;
-      if (scrollable) {
-        const originalScrollTop = scrollable.scrollTop;
-        scrollable.scrollTop = originalScrollTop + 1;
-        requestAnimationFrame(() => {
-          if (cancelled) return;
-          scrollable.scrollTop = originalScrollTop;
-        });
-      }
-
-      return true;
-    };
-
-    // The EmbedPDF web component attaches asynchronously after our host div
-    // mounts, so the very first attempt can still find `viewerHostRef` empty
-    // of the internal scrollable element. Retry a few times over the first
-    // half-second rather than guessing a single "safe" delay.
-    let attempts = 0;
-    const attemptNudge = () => {
-      if (cancelled) return;
-      nudge();
-      attempts += 1;
-      if (attempts < 6) {
-        retryTimer = window.setTimeout(attemptNudge, 100);
-      }
-    };
-    fallbackTimer = window.setTimeout(attemptNudge, 50);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(retryTimer);
-      window.clearTimeout(fallbackTimer);
-    };
-  }, [pdfUrl, viewerKey, viewerMounted]);
-
-  useEffect(() => {
-    if (!pdfUrl) {
-      setViewerMounted(false);
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setViewerMounted(true);
-    }, 50);
-
-    return () => window.clearTimeout(timeout);
-  }, [pdfUrl]);
-
   async function handleComplaintSubmit(event) {
     event.preventDefault();
     setComplaintError("");
@@ -213,23 +120,27 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
       }
 
       const registry = viewerRegistry || (await viewerRef.current?.registry);
-      // getCapabilityProvider() returns the underlying plugin instance, not
-      // the capability object itself — the plugin's own `.provides()` method
-      // is what exposes the callable capability API (commit, saveAsCopy,
-      // exportAnnotations, etc). Calling methods directly off the plugin
-      // instance (as this used to) silently no-ops, which is why annotations
-      // were never actually committed/exported before.
-      const annotationCapability = registry?.getCapabilityProvider("annotation")?.provides();
-      const exportCapability = registry?.getCapabilityProvider("export")?.provides();
+      // The drop-in PDFViewer already registers its annotation and export
+      // plugins. Use the documented registry API to access their capabilities.
+      const annotationCapability = registry
+        ?.getPlugin("annotation")
+        ?.provides();
+      const exportCapability = registry?.getPlugin("export")?.provides();
 
       if (!registry) {
-        console.warn("[SCBE] PDF viewer registry was not ready when the complaint form was submitted.");
+        console.warn(
+          "[SCBE] PDF viewer registry was not ready when the complaint form was submitted.",
+        );
       }
       if (!annotationCapability) {
-        console.warn("[SCBE] annotation capability unavailable — annotations will not be saved.");
+        console.warn(
+          "[SCBE] annotation capability unavailable — annotations will not be saved.",
+        );
       }
       if (!exportCapability) {
-        console.warn("[SCBE] export capability unavailable — falling back to the unedited PDF.");
+        console.warn(
+          "[SCBE] export capability unavailable — falling back to the unedited PDF.",
+        );
       }
 
       if (annotationCapability?.commit) {
@@ -243,7 +154,10 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
           // A failed/empty commit shouldn't block submission entirely —
           // there may simply be nothing pending to commit — but log it so
           // it's visible while debugging.
-          console.warn("[SCBE] annotation commit failed or had nothing to commit:", commitError);
+          console.warn(
+            "[SCBE] annotation commit failed or had nothing to commit:",
+            commitError,
+          );
         }
       }
 
@@ -252,7 +166,10 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
         try {
           buffer = await exportCapability.saveAsCopy().toPromise();
         } catch (exportError) {
-          console.warn("[SCBE] saveAsCopy failed, falling back to the loaded PDF:", exportError);
+          console.warn(
+            "[SCBE] saveAsCopy failed, falling back to the loaded PDF:",
+            exportError,
+          );
         }
       }
 
@@ -260,7 +177,9 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
         buffer instanceof ArrayBuffer
           ? new Blob([buffer], { type: "application/pdf" })
           : await (await fetch(pdfUrl)).blob();
-      const file = new File([fileBlob], `${sheet.fileName || sheet.id}.pdf`, { type: "application/pdf" });
+      const file = new File([fileBlob], `${sheet.fileName || sheet.id}.pdf`, {
+        type: "application/pdf",
+      });
       const formData = new FormData();
       formData.append("title", title);
       formData.append("description", description);
@@ -268,10 +187,15 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
 
       if (annotationCapability?.exportAnnotations) {
         try {
-          const annotations = await annotationCapability.exportAnnotations().toPromise();
+          const annotations = await annotationCapability
+            .exportAnnotations()
+            .toPromise();
           formData.append("annotationData", JSON.stringify(annotations));
         } catch (annotationExportError) {
-          console.warn("[SCBE] exportAnnotations failed:", annotationExportError);
+          console.warn(
+            "[SCBE] exportAnnotations failed:",
+            annotationExportError,
+          );
         }
       }
 
@@ -290,7 +214,12 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
 
   async function updateComplaint(status) {
     if (!complaintContext) return;
-    await api.updateComplaintStatus(user.id, complaintContext.id, status, facultyComment);
+    await api.updateComplaintStatus(
+      user.id,
+      complaintContext.id,
+      status,
+      facultyComment,
+    );
     window.location.reload();
   }
 
@@ -300,14 +229,20 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
         <div>
           <h1>{title}</h1>
           <div className="subtitle">
-            {sheet.course?.code || "Unassigned"} · {sheet.exam?.title || "No examination"} · {sheet.id}
+            {sheet.course?.code || "Unassigned"} ·{" "}
+            {sheet.exam?.title || "No examination"} · {sheet.id}
           </div>
         </div>
         <div className="header-actions">
           <Link className="btn btn-outline" to={`/${user.role}/dashboard`}>
             Dashboard
           </Link>
-          <a className="btn btn-primary" href={pdfUrl} target="_blank" rel="noreferrer">
+          <a
+            className="btn btn-primary"
+            href={pdfUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
             Open in new tab
           </a>
         </div>
@@ -315,7 +250,10 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
 
       <div className="viewer-shell">
         {complaintContext && (
-          <div className="complaint-summary panel pad-20" style={{ margin: 12 }}>
+          <div
+            className="complaint-summary panel pad-20"
+            style={{ margin: 12 }}
+          >
             <div className="title">{complaintContext.title}</div>
             <div className="message-box">{complaintContext.description}</div>
             {complaintContext.resolutionComment && (
@@ -327,16 +265,32 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
               <StatusPill status={complaintContext.status || "Pending"} />
               {user.role === "faculty" && (
                 <>
-                  <button className="btn btn-outline" type="button" onClick={() => updateComplaint("Under Review")}>
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => updateComplaint("Under Review")}
+                  >
                     Under review
                   </button>
-                  <button className="btn btn-primary" type="button" onClick={() => setFacultyActionOpen(true)}>
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => setFacultyActionOpen(true)}
+                  >
                     Resolve
                   </button>
-                  <button className="btn btn-outline" type="button" onClick={() => updateComplaint("Resolved")}>
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => updateComplaint("Resolved")}
+                  >
                     Resolve without comment
                   </button>
-                  <button className="btn btn-outline" type="button" onClick={() => updateComplaint("Rejected")}>
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => updateComplaint("Rejected")}
+                  >
                     Reject
                   </button>
                 </>
@@ -350,7 +304,11 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
           </div>
           <div className="viewer-toolbar-right">
             {user.role === "student" && allowComplaintSubmit && (
-              <button className="btn btn-outline" onClick={() => setComplaintOpen(true)} type="button">
+              <button
+                className="btn btn-outline"
+                onClick={() => setComplaintOpen(true)}
+                type="button"
+              >
                 Add Complaint
               </button>
             )}
@@ -360,32 +318,93 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
           <div className="empty-state">{pdfError}</div>
         ) : loadingPdf ? (
           <Loading />
-        ) : pdfUrl && viewerMounted ? (
-          <div className="viewer-host" ref={viewerHostRef}>
+        ) : pdfUrl ? (
+          <div
+            className="viewer-host"
+            style={{
+              width: "100%",
+              height: "min(80vh, 1000px)",
+              minHeight: 500,
+            }}
+          >
             <PDFViewer
               ref={viewerRef}
-              key={viewerKey}
               config={{
                 src: pdfUrl,
                 theme: { preference: "system" },
+                export: {
+                  defaultFileName: `${sheet.fileName || sheet.id || "document"}.pdf`,
+                },
               }}
               className="pdf-viewer"
-              style={{ width: "100%", height: "100%" }}
+              style={{ display: "block", width: "100%", height: "100%" }}
               onReady={async (registry) => {
                 setViewerRegistry(registry);
+
+                // Workaround for EmbedPDF issue #416: force initial rendering.
+                const docManager = registry
+                  .getPlugin("document-manager")
+                  ?.provides();
+
+                const zoomPlugin = registry.getPlugin("zoom")?.provides();
+
+                if (docManager && zoomPlugin) {
+                  docManager.onDocumentOpened((doc) => {
+                    window.setTimeout(() => {
+                      const docZoom = zoomPlugin.forDocument(doc.id);
+
+                      if (docZoom) {
+                        console.info(
+                          "[SCBE] Applying initial zoom to document:",
+                          doc.id,
+                        );
+                        docZoom.requestZoom(1);
+                      } else {
+                        console.warn(
+                          "[SCBE] Zoom API unavailable for document:",
+                          doc.id,
+                        );
+                      }
+                    }, 100);
+                  });
+                } else {
+                  console.warn(
+                    "[SCBE] Document manager or zoom plugin unavailable.",
+                  );
+                }
+
+                // Import saved annotations only when they exist.
+                // Keep this AFTER registering the document-open listener.
                 if (!complaintContext?.annotationData) return;
-                const annotationCapability = registry.getCapabilityProvider("annotation")?.provides();
+
+                const annotationCapability = registry
+                  .getPlugin("annotation")
+                  ?.provides();
+
                 try {
-                  const annotations = JSON.parse(complaintContext.annotationData || "[]");
-                  annotationCapability?.importAnnotations?.(annotations);
-                } catch {
-                  // ignore malformed stored annotations
+                  const annotations = JSON.parse(
+                    complaintContext.annotationData || "[]",
+                  );
+
+                  const importTask =
+                    annotationCapability?.importAnnotations?.(annotations);
+
+                  if (importTask?.toPromise) {
+                    await importTask.toPromise();
+                  }
+                } catch (error) {
+                  console.warn(
+                    "[SCBE] Unable to import saved annotations:",
+                    error,
+                  );
                 }
               }}
             />
           </div>
         ) : (
-          <div className="empty-state">No PDF is attached to this sheet yet.</div>
+          <div className="empty-state">
+            No PDF is attached to this sheet yet.
+          </div>
         )}
       </div>
 
@@ -398,10 +417,17 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
 
       {complaintOpen && user.role === "student" && (
         <div className="modal-backdrop" onClick={() => setComplaintOpen(false)}>
-          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="modal-card"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="modal-header">
               <h3>Add Complaint</h3>
-              <button className="icon-button" onClick={() => setComplaintOpen(false)} type="button">
+              <button
+                className="icon-button"
+                onClick={() => setComplaintOpen(false)}
+                type="button"
+              >
                 ×
               </button>
             </div>
@@ -421,17 +447,31 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
                   id="complaintDescription"
                   rows="5"
                   value={complaintDescription}
-                  onChange={(event) => setComplaintDescription(event.target.value)}
+                  onChange={(event) =>
+                    setComplaintDescription(event.target.value)
+                  }
                   placeholder="Explain the issue and, if needed, add annotations in the PDF viewer before submitting."
                 />
               </div>
-              {complaintError && <div className="error-text">{complaintError}</div>}
-              {complaintSuccess && <div className="success-text">{complaintSuccess}</div>}
+              {complaintError && (
+                <div className="error-text">{complaintError}</div>
+              )}
+              {complaintSuccess && (
+                <div className="success-text">{complaintSuccess}</div>
+              )}
               <div className="row-actions">
-                <button className="btn btn-primary" type="submit" disabled={submittingComplaint}>
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  disabled={submittingComplaint}
+                >
                   {submittingComplaint ? "Submitting…" : "Submit complaint"}
                 </button>
-                <button className="btn btn-outline" type="button" onClick={() => setComplaintOpen(false)}>
+                <button
+                  className="btn btn-outline"
+                  type="button"
+                  onClick={() => setComplaintOpen(false)}
+                >
                   Cancel
                 </button>
               </div>
@@ -441,11 +481,21 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
       )}
 
       {facultyActionOpen && complaintContext && user.role === "faculty" && (
-        <div className="modal-backdrop" onClick={() => setFacultyActionOpen(false)}>
-          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+        <div
+          className="modal-backdrop"
+          onClick={() => setFacultyActionOpen(false)}
+        >
+          <div
+            className="modal-card"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="modal-header">
               <h3>Resolve complaint</h3>
-              <button className="icon-button" onClick={() => setFacultyActionOpen(false)} type="button">
+              <button
+                className="icon-button"
+                onClick={() => setFacultyActionOpen(false)}
+                type="button"
+              >
                 ×
               </button>
             </div>
@@ -480,7 +530,11 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
               >
                 Resolve without comment
               </button>
-              <button className="btn btn-outline" type="button" onClick={() => setFacultyActionOpen(false)}>
+              <button
+                className="btn btn-outline"
+                type="button"
+                onClick={() => setFacultyActionOpen(false)}
+              >
                 Cancel
               </button>
             </div>
@@ -493,7 +547,10 @@ function ViewerFrame({ user, onLogout, sheet, title, allowComplaintSubmit = fals
 
 export function StudentComplaintPage({ user, onLogout }) {
   const { complaintId } = useParams();
-  const { data, error } = useResource(() => api.studentComplaint(user.id, complaintId), [user.id, complaintId]);
+  const { data, error } = useResource(
+    () => api.studentComplaint(user.id, complaintId),
+    [user.id, complaintId],
+  );
 
   if (error) {
     return (
@@ -510,12 +567,22 @@ export function StudentComplaintPage({ user, onLogout }) {
     );
   }
 
-  return <ViewerFrame user={user} onLogout={onLogout} sheet={data} title="Submitted Complaint Viewer" />;
+  return (
+    <ViewerFrame
+      user={user}
+      onLogout={onLogout}
+      sheet={data}
+      title="Submitted Complaint Viewer"
+    />
+  );
 }
 
 export function StudentSheetPage({ user, onLogout }) {
   const { sheetId } = useParams();
-  const { data, error } = useResource(() => api.sheet(sheetId, user.id), [sheetId, user.id]);
+  const { data, error } = useResource(
+    () => api.sheet(sheetId, user.id),
+    [sheetId, user.id],
+  );
 
   if (error) {
     return (
@@ -545,7 +612,10 @@ export function StudentSheetPage({ user, onLogout }) {
 
 export function FacultySheetPage({ user, onLogout }) {
   const { sheetId } = useParams();
-  const { data, error } = useResource(() => api.sheet(sheetId, user.id), [sheetId, user.id]);
+  const { data, error } = useResource(
+    () => api.sheet(sheetId, user.id),
+    [sheetId, user.id],
+  );
 
   if (error) {
     return (
@@ -562,5 +632,12 @@ export function FacultySheetPage({ user, onLogout }) {
     );
   }
 
-  return <ViewerFrame user={user} onLogout={onLogout} sheet={data} title="Generated PDF Viewer" />;
+  return (
+    <ViewerFrame
+      user={user}
+      onLogout={onLogout}
+      sheet={data}
+      title="Generated PDF Viewer"
+    />
+  );
 }

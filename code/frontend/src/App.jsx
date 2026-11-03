@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import EmbedPdfDiagnostic from "./components/EmbedPdfDiagnostic.jsx"
 import { Navigate, Route, Routes } from "react-router-dom";
 import { LoginPage, RegisterPage } from "./pages/auth.jsx";
 import {
@@ -49,6 +50,7 @@ export default function App() {
 
   return (
     <Routes>
+      <Route path="/pdf-diagnostic" element={<EmbedPdfDiagnostic />} />
       <Route
         path="/"
         element={user ? <Navigate to={`/${user.role}/dashboard`} replace /> : <LoginPage onLogin={setUser} />}
