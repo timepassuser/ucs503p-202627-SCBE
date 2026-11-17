@@ -249,6 +249,72 @@ function totalsFromEvaluations(evaluations) {
   );
 }
 
+function evaluationQuestionLabel(mark) {
+  return `Q${mark.questionNo}${mark.part ? `(${mark.part})` : ""}${
+    mark.subpart ? `(${mark.subpart})` : ""
+  }`;
+}
+
+function normalizeEvaluationMarks(value, existingEvaluations = []) {
+  let marks;
+  try {
+    marks = typeof value === "string" ? JSON.parse(value) : value;
+  } catch {
+    throw new Error("evaluationData must be valid JSON");
+  }
+
+  if (!Array.isArray(marks)) {
+    throw new Error("evaluationData must be an array");
+  }
+
+  const originalMarksByMarker = new Map(
+    existingEvaluations
+      .filter((evaluation) => evaluation.markerId)
+      .map((evaluation) => [evaluation.markerId, evaluation.originalMarks])
+  );
+  const markerIds = new Set();
+
+  return marks.map((mark) => {
+    const markerId = String(mark?.markerId || "").trim();
+    const questionNo = String(mark?.questionNo || "").trim();
+    const marksObtained = Number(mark?.marksObtained);
+    const totalMarks = Number(mark?.totalMarks);
+    if (!markerId || !questionNo) {
+      throw new Error("Every evaluation marker needs an id and question number");
+    }
+    if (markerIds.has(markerId)) {
+      throw new Error("Evaluation marker ids must be unique");
+    }
+    if (
+      !Number.isFinite(marksObtained) ||
+      !Number.isFinite(totalMarks) ||
+      totalMarks <= 0 ||
+      marksObtained < 0 ||
+      marksObtained > totalMarks
+    ) {
+      throw new Error("Evaluation marks are invalid");
+    }
+    markerIds.add(markerId);
+
+    const part = mark.part ? String(mark.part).trim() : null;
+    const subpart = mark.subpart ? String(mark.subpart).trim() : null;
+    return {
+      markerId,
+      annotationId: mark.annotationId ? String(mark.annotationId) : null,
+      labelAnnotationId: mark.labelAnnotationId ? String(mark.labelAnnotationId) : null,
+      pageIndex: Number.isInteger(mark.pageIndex) ? mark.pageIndex : null,
+      rect: mark.rect || null,
+      questionNo,
+      part,
+      subpart,
+      question: evaluationQuestionLabel({ questionNo, part, subpart }),
+      currentMarks: marksObtained,
+      originalMarks: originalMarksByMarker.get(markerId) ?? marksObtained,
+      max: totalMarks,
+    };
+  });
+}
+
 function sheetSummary(row) {
   if (!row) return null;
   const exam = row.examId ? db.prepare("SELECT * FROM exams WHERE id = ?").get(row.examId) || null : null;
@@ -743,11 +809,21 @@ app.post("/api/faculty/:id/sheets/:sheetId/evaluation-pdf", pdfUpload.single("pd
     if (!sheet) return res.status(404).json({ error: "Sheet not found" });
     if (!req.file?.buffer) return res.status(400).json({ error: "annotated pdf is required" });
 
+    const evaluations = normalizeEvaluationMarks(
+      req.body?.evaluationData ?? "[]",
+      JSON.parse(sheet.evaluations || "[]")
+    );
+
     const fileName = `faculty-${sheet.id}-${Date.now()}.pdf`;
     const fileUrl = `/files/generated/pdfs/annotated/${fileName}`;
     fs.writeFileSync(path.join(GENERATED_ANNOTATED_PDF_DIR, fileName), req.file.buffer);
 
-    db.prepare("UPDATE sheets SET fileName = ?, fileUrl = ? WHERE id = ?").run(fileName, fileUrl, sheet.id);
+    db.prepare("UPDATE sheets SET fileName = ?, fileUrl = ?, evaluations = ? WHERE id = ?").run(
+      fileName,
+      fileUrl,
+      JSON.stringify(evaluations),
+      sheet.id
+    );
     res.status(201).json(sheetSummary(db.prepare("SELECT * FROM sheets WHERE id = ?").get(sheet.id)));
   } catch (error) {
     handleDbError(res, error);
@@ -765,7 +841,7 @@ app.post("/api/faculty/:id/sheets/:sheetId/reset-to-original", (req, res) => {
       return res.status(400).json({ error: "This sheet has no original PDF to restore" });
     }
 
-    db.prepare("UPDATE sheets SET fileName = ?, fileUrl = ? WHERE id = ?").run(
+    db.prepare("UPDATE sheets SET fileName = ?, fileUrl = ?, evaluations = '[]' WHERE id = ?").run(
       sheet.originalFileName,
       sheet.originalFileUrl,
       sheet.id
