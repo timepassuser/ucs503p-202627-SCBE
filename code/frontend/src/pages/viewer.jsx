@@ -38,6 +38,7 @@ function ViewerFrame({
   const [savingEvaluation, setSavingEvaluation] = useState(false);
   const [evaluationMessage, setEvaluationMessage] = useState("");
   const [evaluationError, setEvaluationError] = useState("");
+  const [markDialogOpen, setMarkDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!complaintId && sheet?.title && sheet?.description) {
@@ -434,6 +435,61 @@ function ViewerFrame({
               onReady={async (registry) => {
                 setViewerRegistry(registry);
 
+
+              // Register SCBE's custom Mark command.
+const commands = registry.getPlugin("commands")?.provides();
+const ui = registry.getPlugin("ui")?.provides();
+
+console.log("[SCBE] Commands plugin:", commands);
+console.log("[SCBE] UI plugin:", ui);
+
+if (!commands || !ui) {
+  console.error("[SCBE] Required EmbedPDF plugins unavailable.");
+} else {
+  commands.registerCommand({
+    id: "scbe.mark",
+    label: "Mark",
+    action: () => {
+      console.log("[SCBE] Mark button clicked");
+      setMarkDialogOpen(true);
+    },
+  });
+
+  const schema = ui.getSchema();
+
+  console.log("[SCBE] Available toolbars:", Object.keys(schema.toolbars));
+  console.log("[SCBE] Main toolbar schema:", schema.toolbars["main-toolbar"]);
+
+  const toolbar = schema.toolbars["main-toolbar"];
+
+  if (!toolbar) {
+    console.error("[SCBE] Main toolbar not found.");
+  } else {
+    const items = JSON.parse(JSON.stringify(toolbar.items));
+
+    // Avoid inserting the button more than once.
+    if (!items.some((item) => item.id === "scbe-mark-button")) {
+      items.push({
+        type: "command-button",
+        id: "scbe-mark-button",
+        commandId: "scbe.mark",
+        variant: "text",
+      });
+    }
+
+    ui.mergeSchema({
+      toolbars: {
+        "main-toolbar": {
+          ...toolbar,
+          items,
+        },
+      },
+    });
+
+    console.log("[SCBE] Mark button registered.");
+  }
+}
+
                 // Workaround for EmbedPDF issue #416: force initial rendering.
                 const docManager = registry
                   .getPlugin("document-manager")
@@ -634,6 +690,26 @@ function ViewerFrame({
           </div>
         </div>
       )}
+
+{markDialogOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-card">
+            <div className="modal-header">
+              <h3>Mark</h3>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setMarkDialogOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <p>SCBE Mark annotation tool is ready.</p>
+          </div>
+        </div>
+      )}
+
     </AppShell>
   );
 }
