@@ -59,13 +59,11 @@ function prepareDirectories() {
   }
 }
 
-function wipeData() {
-  fs.rmSync(DB_PATH, { force: true });
-  clearDirectoryContents(DATA_DIR);
-  prepareDirectories();
+function quoteIdentifier(identifier) {
+  return `"${identifier.replaceAll('"', '""')}"`;
 }
 
-function seedDatabase() {
+function resetDatabase() {
   const db = new DatabaseSync(DB_PATH);
   db.exec(`
     PRAGMA journal_mode = WAL;
@@ -83,35 +81,67 @@ function seedDatabase() {
     );
   `);
 
-  const insert = db.prepare(`
-    INSERT INTO users (
-      id, name, role, email, password_hash, password_salt, programme, classSection, semester, designation
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+  const userColumns = new Set(db.prepare("PRAGMA table_info(users)").all().map((column) => column.name));
+  if (!userColumns.has("classSection")) {
+    db.exec("ALTER TABLE users ADD COLUMN classSection TEXT DEFAULT '';");
+  }
 
-  for (const user of SAMPLE_USERS) {
-    const { hash, salt } = hashPassword(user.password);
-    insert.run(
-      user.id,
-      user.name,
-      user.role,
-      user.email,
-      hash,
-      salt,
-      user.programme,
-      user.classSection,
-      user.semester,
-      user.designation
-    );
+  const tableNames = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+    .all()
+    .map((table) => table.name);
+
+  db.exec("PRAGMA foreign_keys = OFF; BEGIN IMMEDIATE;");
+  try {
+    for (const tableName of tableNames) {
+      db.exec(`DELETE FROM ${quoteIdentifier(tableName)};`);
+    }
+
+    const insert = db.prepare(`
+      INSERT INTO users (
+        id, name, role, email, password_hash, password_salt, programme, classSection, semester, designation
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const user of SAMPLE_USERS) {
+      const { hash, salt } = hashPassword(user.password);
+      insert.run(
+        user.id,
+        user.name,
+        user.role,
+        user.email,
+        hash,
+        salt,
+        user.programme,
+        user.classSection,
+        user.semester,
+        user.designation
+      );
+    }
+
+    db.exec("COMMIT;");
+  } catch (error) {
+    db.exec("ROLLBACK;");
+    throw error;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON;");
   }
 
   db.close();
 }
 
-wipeData();
-seedDatabase();
+function clearGeneratedFiles() {
+  for (const directory of [path.join(DATA_DIR, "generated"), path.join(DATA_DIR, "uploaded")]) {
+    clearDirectoryContents(directory);
+  }
+  prepareDirectories();
+}
 
-console.log("Reset complete. Seeded:");
+prepareDirectories();
+resetDatabase();
+clearGeneratedFiles();
+
+console.log("Reset complete. Cleared database records and generated/uploaded files. Seeded:");
 for (const user of SAMPLE_USERS) {
   console.log(`- ${user.role}: ${user.id} / ${user.password}`);
 }

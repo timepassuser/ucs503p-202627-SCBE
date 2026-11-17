@@ -71,6 +71,8 @@ db.exec(`
     evaluations TEXT NOT NULL DEFAULT '[]',
     fileName TEXT,
     fileUrl TEXT,
+    originalFileName TEXT,
+    originalFileUrl TEXT,
     detectedRollNumber TEXT,
     detectedName TEXT,
     uploadedBy TEXT,
@@ -141,6 +143,26 @@ function ensureUserSchema() {
 }
 
 ensureUserSchema();
+
+function ensureSheetSchema() {
+  const sheetColumns = db.prepare("PRAGMA table_info(sheets)").all();
+  const columnNames = new Set(sheetColumns.map((column) => column.name));
+  if (!columnNames.has("originalFileName")) {
+    db.exec("ALTER TABLE sheets ADD COLUMN originalFileName TEXT;");
+  }
+  if (!columnNames.has("originalFileUrl")) {
+    db.exec("ALTER TABLE sheets ADD COLUMN originalFileUrl TEXT;");
+  }
+
+  db.exec(`
+    UPDATE sheets
+    SET originalFileName = COALESCE(originalFileName, fileName),
+        originalFileUrl = COALESCE(originalFileUrl, fileUrl)
+    WHERE originalFileName IS NULL OR originalFileUrl IS NULL;
+  `);
+}
+
+ensureSheetSchema();
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
   const derived = crypto.scryptSync(password, salt, 64).toString("hex");
@@ -627,11 +649,13 @@ app.post("/api/faculty/:id/sheets/process-video", videoUpload.single("video"), a
     const originalFileName = storePdf(path.join(GENERATED_PDF_DIR, cvResult.pdf_name), GENERATED_ORIGINAL_PDF_DIR, cvResult.pdf_name);
     db.prepare(`
       INSERT INTO sheets
-        (id, examId, studentId, published, evaluations, fileName, fileUrl, detectedRollNumber, detectedName, uploadedBy, createdAt, sourceType)
-      VALUES (?, NULL, NULL, 0, ?, ?, ?, NULL, NULL, ?, ?, ?)
+        (id, examId, studentId, published, evaluations, fileName, fileUrl, originalFileName, originalFileUrl, detectedRollNumber, detectedName, uploadedBy, createdAt, sourceType)
+      VALUES (?, NULL, NULL, 0, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
     `).run(
       sheetId,
       "[]",
+      originalFileName,
+      `/files/generated/pdfs/originals/${originalFileName}`,
       originalFileName,
       `/files/generated/pdfs/originals/${originalFileName}`,
       faculty.id,
@@ -710,6 +734,48 @@ app.post("/api/students/:id/sheets/:sheetId/complaints", pdfUpload.single("pdf")
   }
 });
 
+app.post("/api/faculty/:id/sheets/:sheetId/evaluation-pdf", pdfUpload.single("pdf"), (req, res) => {
+  try {
+    const faculty = requireUser(req.params.id, "faculty", res);
+    if (!faculty) return;
+
+    const sheet = db.prepare("SELECT * FROM sheets WHERE id = ?").get(req.params.sheetId);
+    if (!sheet) return res.status(404).json({ error: "Sheet not found" });
+    if (!req.file?.buffer) return res.status(400).json({ error: "annotated pdf is required" });
+
+    const fileName = `faculty-${sheet.id}-${Date.now()}.pdf`;
+    const fileUrl = `/files/generated/pdfs/annotated/${fileName}`;
+    fs.writeFileSync(path.join(GENERATED_ANNOTATED_PDF_DIR, fileName), req.file.buffer);
+
+    db.prepare("UPDATE sheets SET fileName = ?, fileUrl = ? WHERE id = ?").run(fileName, fileUrl, sheet.id);
+    res.status(201).json(sheetSummary(db.prepare("SELECT * FROM sheets WHERE id = ?").get(sheet.id)));
+  } catch (error) {
+    handleDbError(res, error);
+  }
+});
+
+app.post("/api/faculty/:id/sheets/:sheetId/reset-to-original", (req, res) => {
+  try {
+    const faculty = requireUser(req.params.id, "faculty", res);
+    if (!faculty) return;
+
+    const sheet = db.prepare("SELECT * FROM sheets WHERE id = ?").get(req.params.sheetId);
+    if (!sheet) return res.status(404).json({ error: "Sheet not found" });
+    if (!sheet.originalFileName || !sheet.originalFileUrl) {
+      return res.status(400).json({ error: "This sheet has no original PDF to restore" });
+    }
+
+    db.prepare("UPDATE sheets SET fileName = ?, fileUrl = ? WHERE id = ?").run(
+      sheet.originalFileName,
+      sheet.originalFileUrl,
+      sheet.id
+    );
+    res.json(sheetSummary(db.prepare("SELECT * FROM sheets WHERE id = ?").get(sheet.id)));
+  } catch (error) {
+    handleDbError(res, error);
+  }
+});
+
 app.patch("/api/faculty/:id/complaints/:complaintId", (req, res) => {
   try {
     const faculty = requireUser(req.params.id, "faculty", res);
@@ -751,11 +817,13 @@ app.post("/api/faculty/:id/sheets/process-images", imageUpload.array("images"), 
     const originalFileName = storePdf(path.join(GENERATED_PDF_DIR, cvResult.pdf_name), GENERATED_ORIGINAL_PDF_DIR, cvResult.pdf_name);
     db.prepare(`
       INSERT INTO sheets
-        (id, examId, studentId, published, evaluations, fileName, fileUrl, detectedRollNumber, detectedName, uploadedBy, createdAt, sourceType)
-      VALUES (?, NULL, NULL, 0, ?, ?, ?, NULL, NULL, ?, ?, ?)
+        (id, examId, studentId, published, evaluations, fileName, fileUrl, originalFileName, originalFileUrl, detectedRollNumber, detectedName, uploadedBy, createdAt, sourceType)
+      VALUES (?, NULL, NULL, 0, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
     `).run(
       sheetId,
       "[]",
+      originalFileName,
+      `/files/generated/pdfs/originals/${originalFileName}`,
       originalFileName,
       `/files/generated/pdfs/originals/${originalFileName}`,
       faculty.id,
@@ -832,12 +900,14 @@ app.post("/api/faculty/:id/sheets/assign", (req, res) => {
     if (sheetId) {
       db.prepare(`
         UPDATE sheets
-        SET examId = ?, studentId = ?, published = 0, evaluations = ?, fileName = ?, fileUrl = ?, detectedRollNumber = ?, detectedName = ?, uploadedBy = ?, createdAt = ?, sourceType = ?
+        SET examId = ?, studentId = ?, published = 0, evaluations = ?, fileName = ?, fileUrl = ?, originalFileName = ?, originalFileUrl = ?, detectedRollNumber = ?, detectedName = ?, uploadedBy = ?, createdAt = ?, sourceType = ?
         WHERE id = ?
       `).run(
         examId || null,
         studentId,
         JSON.stringify([]),
+        finalFileName,
+        finalFileUrl,
         finalFileName,
         finalFileUrl,
         rollNumber || null,
@@ -850,13 +920,15 @@ app.post("/api/faculty/:id/sheets/assign", (req, res) => {
     } else {
       db.prepare(`
         INSERT INTO sheets
-          (id, examId, studentId, published, evaluations, fileName, fileUrl, detectedRollNumber, detectedName, uploadedBy, createdAt, sourceType)
-        VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, examId, studentId, published, evaluations, fileName, fileUrl, originalFileName, originalFileUrl, detectedRollNumber, detectedName, uploadedBy, createdAt, sourceType)
+        VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         targetSheetId,
         examId || null,
         studentId,
         JSON.stringify([]),
+        finalFileName,
+        finalFileUrl,
         finalFileName,
         finalFileUrl,
         rollNumber || null,
