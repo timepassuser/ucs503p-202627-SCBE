@@ -62,6 +62,10 @@ export const api = {
   processVideo: (facultyId, formData) => upload(`/faculty/${facultyId}/sheets/process-video`, formData),
   processImages: (facultyId, formData) => upload(`/faculty/${facultyId}/sheets/process-images`, formData),
   modifyPdf: (facultyId, formData) => upload(`/faculty/${facultyId}/sheets/modify`, formData),
+  saveEvaluationPdf: (facultyId, sheetId, formData) =>
+    upload(`/faculty/${facultyId}/sheets/${sheetId}/evaluation-pdf`, formData),
+  resetSheetToOriginal: (facultyId, sheetId) =>
+    request(`/faculty/${facultyId}/sheets/${sheetId}/reset-to-original`, { method: "POST" }),
   assignSheet: (facultyId, payload) =>
     request(`/faculty/${facultyId}/sheets/assign`, { method: "POST", body: JSON.stringify(payload) }),
   publishSheet: (sheetId) => request(`/sheets/${sheetId}/publish`, { method: "PATCH" }),

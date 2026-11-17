@@ -9,6 +9,19 @@ function formatScore(value) {
   return Number(value || 0);
 }
 
+function hasEvaluation(sheet) {
+  return Number(sheet.totals?.max || 0) > 0;
+}
+
+function courseLabel(sheet) {
+  return sheet.course ? `${sheet.course.code} · ${sheet.course.title}` : "<Unassigned Course>";
+}
+
+function examLabel(sheet) {
+  if (!sheet.exam) return "<Unassigned Exam>";
+  return [sheet.exam.title, sheet.exam.session].filter(Boolean).join(" · ") || "<Unassigned Exam>";
+}
+
 export function FacultyDashboard({ user, onLogout }) {
   const { data, error } = useResource(() => api.facultyDashboard(user.id), [user.id]);
 
@@ -118,7 +131,7 @@ export function FacultySheets({ user, onLogout }) {
     <AppShell role="faculty" user={user} onLogout={onLogout}>
       <div className="page-header">
         <div>
-          <h1>Assigned Answer Sheets</h1>
+          <h1>Answer Sheet Management</h1>
           <div className="subtitle">All sheets currently tracked by the evaluation workflow.</div>
         </div>
         <Link className="btn btn-primary" to="/faculty/upload">
@@ -168,6 +181,7 @@ export function FacultySheets({ user, onLogout }) {
           )}
         </>
       )}
+      {data && data.length > 0 && <h3 className="section-title">Assigned answer sheets</h3>}
       {data && data.length === 0 && <EmptyState>No sheets yet.</EmptyState>}
       {data && data.length > 0 && (
         <div className="panel">
@@ -175,14 +189,18 @@ export function FacultySheets({ user, onLogout }) {
             <div className="panel-row" key={sheet.id}>
               <div className="grow">
                 <div className="title">
-                  {sheet.course?.code} · {sheet.course?.title}
+                  {courseLabel(sheet)}, {examLabel(sheet)}
                 </div>
                 <div className="meta">
-                  {sheet.studentName || "Unknown student"} · {sheet.exam?.session} · {sheet.id}
+                  {[sheet.studentName || "Unknown student", sheet.id].join(" · ")}
                 </div>
               </div>
               <div className="score-block">
-                <div className="score">{formatScore(sheet.totals.current)}/{formatScore(sheet.totals.max)}</div>
+                <div className="score">
+                  {hasEvaluation(sheet)
+                    ? `${formatScore(sheet.totals.current)}/${formatScore(sheet.totals.max)}`
+                    : "Not evaluated"}
+                </div>
                 <div className="meta">{sheet.published ? "Published" : "Draft"}</div>
               </div>
               {sheet.fileUrl && (
@@ -473,11 +491,15 @@ export function FacultyUpload({ user, onLogout }) {
                   <div className="field-grid">
                     <div className="field">
                       <label htmlFor="rollNumber">Roll number</label>
-                      <input id="rollNumber" value={rollNumber} onChange={(event) => setRollNumber(event.target.value)} />
+                      <input id="rollNumber" value={rollNumber} onChange={(event) => setRollNumber(event.target.value
+                        // <input id="rollNumber" value={1024170014} onChange={(event) => setRollNumber(event.target.value
+                      )} />
                     </div>
                     <div className="field">
                       <label htmlFor="name">Student name</label>
-                      <input id="name" value={name} onChange={(event) => setName(event.target.value)} />
+                      <input id="name" value={name} onChange={(event) => setName(event.target.value
+                        // {/* <input id="name" value={"Gurneet Singh"} onChange={(event) => setName(event.target.value */}
+                      )} />
                     </div>
                   </div>
                   <button className="btn btn-primary" type="submit" disabled={assigning}>

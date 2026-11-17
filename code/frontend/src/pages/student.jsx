@@ -6,7 +6,19 @@ import { AppShell } from "../components/layout.jsx";
 import { EmptyState, Loading, StatCard, StatusPill } from "../components/ui.jsx";
 
 function sheetScore(sheet) {
+  if (Number(sheet.totals?.max || 0) === 0) {
+    return "Not evaluated";
+  }
   return `${sheet.totals.current}/${sheet.totals.max}`;
+}
+
+function courseLabel(sheet) {
+  return sheet.course ? `${sheet.course.code} · ${sheet.course.title}` : "<Unassigned Course>";
+}
+
+function examLabel(sheet) {
+  if (!sheet.exam) return "<Unassigned Exam>";
+  return [sheet.exam.title, sheet.exam.session].filter(Boolean).join(" · ") || "<Unassigned Exam>";
 }
 
 export function StudentDashboard({ user, onLogout }) {
@@ -56,10 +68,10 @@ export function StudentDashboard({ user, onLogout }) {
                     <div className="panel-row" key={sheet.id}>
                       <div className="grow">
                         <div className="title">
-                          {sheet.course?.code} · {sheet.course?.title}
+                          {courseLabel(sheet)}, {examLabel(sheet)}
                         </div>
                         <div className="meta">
-                          {sheet.exam?.title} · {sheet.exam?.session} · Booklet {sheet.id}
+                          Booklet {sheet.id}
                         </div>
                       </div>
                       <div className="score-block">
@@ -144,10 +156,10 @@ export function StudentSheets({ user, onLogout }) {
             <div className="panel-row" key={sheet.id}>
               <div className="grow">
                 <div className="title">
-                  {sheet.course?.code} · {sheet.course?.title}
+                  {courseLabel(sheet)}, {examLabel(sheet)}
                 </div>
                 <div className="meta">
-                  {sheet.exam?.title} · {sheet.exam?.session} · Booklet {sheet.id}
+                  Booklet {sheet.id}
                 </div>
               </div>
               <div className="score-block">
@@ -256,7 +268,7 @@ export function StudentSheetViewer({ user, onLogout }) {
               <div className="sheet-total">
                 <span>Total</span>
                 <strong>
-                  {data.totals.current}/{data.totals.max}
+                  {sheetScore(data)}
                 </strong>
               </div>
             </div>

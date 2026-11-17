@@ -12,6 +12,7 @@ function ViewerFrame({
   sheet,
   title,
   allowComplaintSubmit = false,
+  allowEvaluationSave = false,
 }) {
   const location = useLocation();
   const complaintId = new URLSearchParams(location.search).get("complaintId");
@@ -34,6 +35,9 @@ function ViewerFrame({
   const [complaintSuccess, setComplaintSuccess] = useState("");
   const [facultyActionOpen, setFacultyActionOpen] = useState(false);
   const [facultyComment, setFacultyComment] = useState("");
+  const [savingEvaluation, setSavingEvaluation] = useState(false);
+  const [evaluationMessage, setEvaluationMessage] = useState("");
+  const [evaluationError, setEvaluationError] = useState("");
 
   useEffect(() => {
     if (!complaintId && sheet?.title && sheet?.description) {
@@ -223,6 +227,73 @@ function ViewerFrame({
     window.location.reload();
   }
 
+  async function saveEvaluation() {
+    setEvaluationError("");
+    setEvaluationMessage("");
+    setSavingEvaluation(true);
+
+    try {
+      const registry = viewerRegistry || (await viewerRef.current?.registry);
+      const annotationCapability = registry?.getPlugin("annotation")?.provides();
+      const exportCapability = registry?.getPlugin("export")?.provides();
+
+      if (!exportCapability?.saveAsCopy) {
+        throw new Error("The PDF export tool is not ready yet. Please wait a moment and try again.");
+      }
+
+      if (annotationCapability?.commit) {
+        try {
+          await annotationCapability.commit().toPromise();
+        } catch (commitError) {
+          console.warn("[SCBE] evaluation annotation commit failed:", commitError);
+        }
+      }
+
+      const exportedPdf = await exportCapability.saveAsCopy().toPromise();
+      const canCreatePdf =
+        exportedPdf instanceof Blob ||
+        exportedPdf instanceof ArrayBuffer ||
+        ArrayBuffer.isView(exportedPdf);
+      if (!canCreatePdf) {
+        throw new Error("The viewer did not return an exported PDF.");
+      }
+
+      const pdfFile = new File(
+        [exportedPdf],
+        `${sheet.id}-evaluation.pdf`,
+        { type: "application/pdf" },
+      );
+      const formData = new FormData();
+      formData.append("pdf", pdfFile);
+      await api.saveEvaluationPdf(user.id, sheet.id, formData);
+      setEvaluationMessage("Evaluation saved. Reloading the latest PDF…");
+      window.setTimeout(() => window.location.reload(), 400);
+    } catch (error) {
+      setEvaluationError(error.message || "Unable to save the evaluation PDF.");
+    } finally {
+      setSavingEvaluation(false);
+    }
+  }
+
+  async function resetToOriginal() {
+    if (!window.confirm("Reset this sheet to its original PDF? The current evaluated copy will no longer be shown.")) {
+      return;
+    }
+
+    setEvaluationError("");
+    setEvaluationMessage("");
+    setSavingEvaluation(true);
+    try {
+      await api.resetSheetToOriginal(user.id, sheet.id);
+      setEvaluationMessage("Original PDF restored. Reloading…");
+      window.setTimeout(() => window.location.reload(), 400);
+    } catch (error) {
+      setEvaluationError(error.message || "Unable to restore the original PDF.");
+    } finally {
+      setSavingEvaluation(false);
+    }
+  }
+
   return (
     <AppShell role={user.role} user={user} onLogout={onLogout}>
       <div className="page-header viewer-header">
@@ -312,8 +383,30 @@ function ViewerFrame({
                 Add Complaint
               </button>
             )}
+            {user.role === "faculty" && allowEvaluationSave && (
+              <>
+                <button
+                  className="btn btn-primary"
+                  onClick={saveEvaluation}
+                  type="button"
+                  disabled={savingEvaluation}
+                >
+                  {savingEvaluation ? "Saving…" : "Save Evaluation"}
+                </button>
+                <button
+                  className="btn btn-outline"
+                  onClick={resetToOriginal}
+                  type="button"
+                  disabled={savingEvaluation}
+                >
+                  Reset To Original
+                </button>
+              </>
+            )}
           </div>
         </div>
+        {evaluationError && <div className="error-text">{evaluationError}</div>}
+        {evaluationMessage && <div className="success-text">{evaluationMessage}</div>}
         {pdfError ? (
           <div className="empty-state">{pdfError}</div>
         ) : loadingPdf ? (
@@ -638,6 +731,7 @@ export function FacultySheetPage({ user, onLogout }) {
       onLogout={onLogout}
       sheet={data}
       title="Generated PDF Viewer"
+      allowEvaluationSave
     />
   );
 }
